@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Image from 'next/image'; // Importe o componente Image
 import { Mic, Square, Volume2, Loader } from 'lucide-react';
 import { PERGUNTAS_DNA, criarPerfilInicial } from '../lib/config';
 import { analisarFragmento, gerarSinteseFinal } from '../lib/analysisEngine';
@@ -132,16 +133,22 @@ const ProgressIndicator = ({ current, total }: { current: number; total: number 
   );
 };
 
-// Componente do logo
+// --- CORREÇÃO APLICADA AQUI ---
+// Componente do logo atualizado para usar o componente Image do Next.js
 const Logo = () => (
   <div className="logo-container">
-    <img 
-      src="/logo.png" 
+    <Image 
+      src="/logo.png" // O caminho é relativo à pasta 'public'
       alt="Logo" 
+      width={75} // Defina a largura da imagem
+      height={30} // Defina a altura da imagem
       className="logo-image"
+      priority // Opcional: para carregar a imagem com prioridade
     />
   </div>
 );
+// --- FIM DA CORREÇÃO ---
+
 
 // Componente do rodapé
 const Footer = () => (

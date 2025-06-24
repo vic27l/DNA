@@ -69,8 +69,8 @@ body {
 }
 
 .logo-image {
-  height: 60px;
-  width: auto;
+  height: auto; /* A altura será automática baseada na largura e proporção */
+  width: 100%; /* A imagem ocupará a largura do contâiner */
   object-fit: contain;
 }
 
