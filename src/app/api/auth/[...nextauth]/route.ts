@@ -17,8 +17,12 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY in .env.local');
 }
+if (!process.env.NEXTAUTH_SECRET) {
+  throw new Error('Missing NEXTAUTH_SECRET in .env.local');
+}
 
-export const authOptions: NextAuthOptions = {
+// CORREÇÃO: A palavra "export" foi removida desta linha.
+const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -26,12 +30,11 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
   adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!, 
   }),
   callbacks: {
     async session({ session, user }) {
-      // Adiciona o ID do usuário à sessão para que possamos usá-lo no frontend
       if (session.user) {
         session.user.id = user.id;
       }
@@ -41,6 +44,8 @@ export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
 };
 
+// O handler é criado usando as authOptions definidas acima
 const handler = NextAuth(authOptions);
 
+// Apenas as funções GET e POST são exportadas, como o Next.js espera.
 export { handler as GET, handler as POST };
