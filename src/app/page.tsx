@@ -13,10 +13,7 @@ import { initAudio, playAudioFromUrl, startRecording, stopRecording } from '../s
 import type { ExpertProfile, SessionStatus, Pergunta } from '../lib/types';
 import LoginButton from '@/components/LoginButton';
 
-// --- Componentes Auxiliares de UI ---
-// (Estes são componentes visuais para enriquecer a interface)
-
-// Um componente para o rodapé
+// --- Componente Auxiliar de UI para o Rodapé ---
 const Footer = () => (
   <footer className="absolute bottom-4 text-center w-full text-xs text-gray-500">
     <p>Plataforma de Análise Narrativa Profunda. Todos os direitos reservados © {new Date().getFullYear()}</p>
@@ -24,7 +21,7 @@ const Footer = () => (
 );
 
 // --- Cliente Supabase para o Frontend ---
-// Usamos as chaves públicas que podem ser expostas no navegador
+// Usamos as chaves públicas (ANON_KEY) que são seguras para serem expostas no navegador.
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -42,7 +39,6 @@ export default function DnaInterface() {
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
 
-  // useRef para manter o índice da pergunta entre renderizações sem causar re-renderização
   const perguntaIndex = useRef(0);
 
   // Inicializa o serviço de áudio uma vez quando o componente é montado
@@ -60,40 +56,39 @@ export default function DnaInterface() {
    * Cria um registro no banco de dados e prepara o estado para a primeira pergunta.
    */
   const iniciarSessao = useCallback(async () => {
+    // Graças ao 'next-auth.d.ts' e 'tsconfig.json', o TypeScript agora entende 'session.user.id'
     if (!session?.user?.id) {
       setError("Você precisa estar logado para iniciar uma sessão.");
       return;
     }
 
-    // Reseta o estado para uma nova análise
     perguntaIndex.current = 0;
     setPerfil(criarPerfilInicial());
     setError(null);
-    setStatus('processing'); // Mostra um loader enquanto cria a sessão
+    setStatus('processing');
 
     try {
-      // Cria uma nova sessão na tabela 'analysis_sessions' do Supabase
       const { data, error: dbError } = await supabase
         .from('analysis_sessions')
         .insert({ user_id: session.user.id }) // Associa a sessão ao usuário logado
-        .select('id') // Pede para retornar o ID da nova sessão
-        .single(); // Espera um único resultado
+        .select('id')
+        .single();
 
       if (dbError || !data) {
         throw dbError || new Error("Não foi possível obter o ID da nova sessão.");
       }
 
-      setCurrentSessionId(data.id); // Armazena o ID da sessão atual no estado
-      fazerProximaPergunta(); // Inicia o ciclo de perguntas
+      setCurrentSessionId(data.id);
+      fazerProximaPergunta();
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : "Erro desconhecido";
       setError(`Erro ao criar a sessão no banco de dados: ${errorMessage}`);
       setStatus('idle');
     }
-  }, [session]);
+  }, [session]); // Depende do objeto session
 
   /**
-   * Apresenta a próxima pergunta ou finaliza a sessão se todas as perguntas foram feitas.
+   * Apresenta a próxima pergunta ou finaliza a sessão.
    */
   const fazerProximaPergunta = useCallback(async () => {
     if (perguntaIndex.current < PERGUNTAS_DNA.length) {
@@ -103,7 +98,6 @@ export default function DnaInterface() {
       setIsAudioPlaying(true);
       
       try {
-        // Toca o áudio da pergunta e, ao terminar, muda o estado para aguardar a resposta do usuário
         await playAudioFromUrl(pergunta.audioUrl, () => {
           setStatus('waiting_for_user');
           setIsAudioPlaying(false);
@@ -112,14 +106,12 @@ export default function DnaInterface() {
       } catch (err) {
         console.error("Erro ao reproduzir áudio:", err);
         setError("Erro ao reproduzir a pergunta. Tentando novamente...");
-        setTimeout(fazerProximaPergunta, 2000); // Tenta novamente após 2 segundos
+        setTimeout(fazerProximaPergunta, 2000);
       }
     } else {
-      // Fim das perguntas: gera e salva o relatório final
       setStatus('processing');
       const sinteseFinal = gerarSinteseFinal(perfil);
       
-      // Atualiza a sessão no Supabase com o relatório final
       await supabase
         .from('analysis_sessions')
         .update({ final_synthesis: sinteseFinal })
@@ -143,7 +135,7 @@ export default function DnaInterface() {
   }, []);
   
   /**
-   * Para a gravação, envia o áudio para o backend, analisa a transcrição e avança para a próxima pergunta.
+   * Para a gravação, envia o áudio para o backend e avança para a próxima pergunta.
    */
   const handleStopRecording = useCallback(async () => {
     setStatus('processing');
@@ -151,16 +143,14 @@ export default function DnaInterface() {
       const audioBlob = await stopRecording();
       const transcricao = await transcreverEProcessarAudio(audioBlob);
       if (perguntaAtual) {
-        // Atualiza o perfil psicológico com base na nova transcrição
         const perfilAtualizado = analisarFragmento(transcricao, perfil, perguntaAtual);
         setPerfil(perfilAtualizado);
       }
-      fazerProximaPergunta(); // Chama a próxima pergunta
+      fazerProximaPergunta();
     } catch (err) {
       console.error("Erro ao processar gravação:", err);
       const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-      setError(`Problema ao processar sua resposta: ${errorMessage}. Continuando para a próxima pergunta...`);
-      // Mesmo com erro, continua para não travar o fluxo
+      setError(`Problema ao processar sua resposta: ${errorMessage}. Continuando...`);
       setTimeout(fazerProximaPergunta, 2000);
     }
   }, [perguntaAtual, perfil, fazerProximaPergunta]);
@@ -173,13 +163,11 @@ export default function DnaInterface() {
         throw new Error("ID da sessão ou pergunta atual não definidos.");
     }
 
-    // FormData é usado para enviar arquivos em requisições HTTP
     const formData = new FormData();
     formData.append('audio', audioBlob, 'resposta.webm');
     formData.append('sessionId', currentSessionId);
     formData.append('questionText', perguntaAtual.texto);
 
-    // Envia para a nossa API route
     const response = await fetch('/api/transcribe', {
       method: 'POST',
       body: formData,
@@ -187,14 +175,12 @@ export default function DnaInterface() {
 
     const data = await response.json();
     if (!response.ok) {
-        // Se a resposta não for OK, lança um erro com a mensagem do backend
         throw new Error(data.error || "Falha na transcrição no servidor");
     }
     return data.transcript;
   };
 
-  // --- Renderização da UI ---
-  // A UI muda drasticamente com base no status de autenticação
+  // --- Renderização Condicional da UI ---
 
   // 1. Tela de Carregamento da Autenticação
   if (authStatus === 'loading') {
@@ -224,7 +210,6 @@ export default function DnaInterface() {
   return (
     <div className="main-container flex flex-col items-center justify-center p-4">
       
-      {/* Tela de Boas-Vindas e Início */}
       {status === 'idle' && (
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-2 text-white">Bem-vindo(a), {session.user?.name}!</h1>
@@ -238,7 +223,6 @@ export default function DnaInterface() {
         </div>
       )}
 
-      {/* Tela de Análise Finalizada */}
       {status === 'finished' && (
         <div className="text-center max-w-4xl mx-auto animate-fade-in">
              <h1 className="text-3xl font-bold mb-4 text-white">Análise Concluída</h1>
@@ -257,7 +241,6 @@ export default function DnaInterface() {
         </div>
       )}
       
-      {/* Telas Durante o Processo de Análise */}
       {['listening', 'waiting_for_user', 'recording', 'processing'].includes(status) && (
         <div className="text-center animate-fade-in">
              <p className="text-lg mb-2 text-gray-400">Pergunta {perguntaIndex.current} de {PERGUNTAS_DNA.length}</p>
@@ -290,7 +273,6 @@ export default function DnaInterface() {
         </div>
       )}
       
-      {/* Exibição de Erro */}
       {error && <p className="absolute bottom-10 text-red-400 bg-red-900/50 px-4 py-2 rounded-md">{error}</p>}
       
       <Footer />
