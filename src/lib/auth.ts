@@ -20,12 +20,22 @@ export const authOptions: NextAuthOptions = {
   adapter: SupabaseAdapter({
     url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
     secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    // Explicitly specify the schema (though 'public' is default)
+    schema: 'public'
   }),
   session: {
     strategy: "database",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
   },
   callbacks: {
     async session({ session, user }) {
+      // Enhanced logging for debugging
+      console.log('Session callback:', {
+        sessionUser: session?.user?.email,
+        userId: user?.id,
+        timestamp: new Date().toISOString()
+      });
+      
       if (session?.user && user) {
         session.user.id = user.id;
       }
@@ -40,7 +50,6 @@ export const authOptions: NextAuthOptions = {
         timestamp: new Date().toISOString()
       });
       
-      // Allow sign in
       return true;
     },
     async redirect({ url, baseUrl }) {
@@ -64,4 +73,18 @@ export const authOptions: NextAuthOptions = {
   },
   debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,
+  // Add additional configuration for better error handling
+  logger: {
+    error(code, metadata) {
+      console.error('NextAuth Error:', code, metadata);
+    },
+    warn(code) {
+      console.warn('NextAuth Warning:', code);
+    },
+    debug(code, metadata) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('NextAuth Debug:', code, metadata);
+      }
+    },
+  },
 };
