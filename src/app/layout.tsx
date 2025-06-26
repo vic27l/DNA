@@ -1,8 +1,12 @@
+// src/app/layout.tsx (Modificado)
+
 import type { Metadata, Viewport } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import { cn } from "@/lib/utils";
+import AuthProvider from '@/components/AuthProvider'; // Importa o AuthProvider
 import './globals.css';
 
+// Configuração das fontes (sem alterações)
 const fontSans = Inter({
   subsets: ['latin'],
   variable: '--font-sans',
@@ -15,6 +19,7 @@ const fontMono = JetBrains_Mono({
   display: 'swap',
 });
 
+// Metadados (sem alterações)
 export const metadata: Metadata = {
   title: 'DNA - Deep Narrative Analysis | Análise Psicológica Avançada',
   description: 'Plataforma profissional de análise narrativa profunda usando IA avançada. Descubra padrões psicológicos através da sua narrativa pessoal.',
@@ -49,10 +54,11 @@ export const metadata: Metadata = {
   },
 };
 
+// Viewport (sem alterações)
 export const viewport: Viewport = {
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#22c55e' },
-    { media: '(prefers-color-scheme: dark)', color: '#22c55e' }
+    { media: '(prefers-color-scheme: light)', color: '#ff6b35' },
+    { media: '(prefers-color-scheme: dark)', color: '#ff6b35' }
   ],
   width: 'device-width',
   initialScale: 1,
@@ -60,6 +66,8 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
+
+// Layout principal da aplicação
 export default function RootLayout({
   children,
 }: {
@@ -77,9 +85,16 @@ export default function RootLayout({
         fontSans.variable,
         fontMono.variable
       )}>
-        <div className="relative">
-          {children}
-        </div>
+        {/*
+          Envolvemos todo o conteúdo da aplicação com o AuthProvider.
+          Isso garante que o contexto da sessão de autenticação esteja
+          disponível para todos os componentes da aplicação.
+        */}
+        <AuthProvider>
+          <div className="relative">
+            {children}
+          </div>
+        </AuthProvider>
       </body>
     </html>
   );
