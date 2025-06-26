@@ -1,130 +1,90 @@
-// services/googleDriveService.ts
-
+// src/services/googleDriveService.ts
 import { google } from 'googleapis';
-import { Readable } from 'stream';
+import stream from 'stream';
 
-// Configuração da autenticação com Google Drive
-const auth = new google.auth.GoogleAuth({
-  credentials: {
-    type: 'service_account',
-    project_id: process.env.GOOGLE_PROJECT_ID,
-    private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    client_email: process.env.GOOGLE_CLIENT_EMAIL,
-    client_id: process.env.GOOGLE_CLIENT_ID,
-  },
-  scopes: ['https://www.googleapis.com/auth/drive.file'],
-});
+// Função para criar um cliente OAuth2 autenticado
+const getAuthenticatedClient = () => {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    // O URI de redirecionamento pode ser o do OAuth Playground ou da sua app
+    'http://localhost:3000/api/auth/callback/google'
+  );
 
-const drive = google.drive({ version: 'v3', auth });
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_DRIVE_ADMIN_REFRESH_TOKEN,
+  });
 
-/**
- * Função para criar uma pasta no Google Drive
- */
-async function createFolder(name: string, parentId?: string): Promise<string> {
-  const fileMetadata = {
-    name,
-    mimeType: 'application/vnd.google-apps.folder',
-    ...(parentId && { parents: [parentId] }),
-  };
+  return oauth2Client;
+};
 
-  try {
-    const file = await drive.files.create({
-      requestBody: fileMetadata, // Corrigido: usar requestBody ao invés de resource
-      fields: 'id',
-    });
-    if (!file.data.id) throw new Error('A criação da pasta não retornou um ID.');
-    return file.data.id;
-  } catch (error) {
-    console.error('Erro ao criar pasta no Google Drive:', error);
-    throw new Error('Falha ao criar pasta no Google Drive.');
-  }
-}
-
-/**
- * Função para verificar se uma pasta existe
- */
-async function folderExists(name: string, parentId?: string): Promise<string | null> {
-  try {
-    const query = parentId
-      ? `name='${name}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`
-      : `name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-
-    const response = await drive.files.list({
-      q: query,
-      fields: 'files(id, name)',
-    });
-
-    return response.data.files && response.data.files.length > 0 
-      ? response.data.files[0].id || null 
-      : null;
-  } catch (error) {
-    console.error('Erro ao verificar existência da pasta:', error);
-    return null;
-  }
-}
-
-/**
- * Função para obter ou criar uma pasta
- */
-async function getOrCreateFolder(name: string, parentId?: string): Promise<string> {
-  let folderId = await folderExists(name, parentId);
-  if (!folderId) {
-    folderId = await createFolder(name, parentId);
-  }
-  return folderId;
-}
-
-/**
- * Função principal para upload de áudio
- */
-export async function uploadAudioToDrive(
+// Função para fazer upload de um áudio para o Google Drive
+export const uploadAudioToDrive = async (
   audioBlob: Blob,
   userEmail: string,
-  questionText: string
-): Promise<string> {
-  try {
-    // 1. Criar/obter pasta "DNA Audio Responses"
-    const mainFolderId = await getOrCreateFolder('DNA Audio Responses');
+  questionText: string,
+  sessionCreatedAt: Date
+): Promise<string> => {
+  const oauth2Client = getAuthenticatedClient();
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
-    // 2. Criar/obter pasta do usuário
-    const userFolderId = await getOrCreateFolder(userEmail, mainFolderId);
+  const parentFolderId = process.env.GOOGLE_DRIVE_PARENT_FOLDER_ID;
+  if (!parentFolderId) {
+    throw new Error('ID da pasta do Google Drive não configurado.');
+  }
 
-    // 3. Preparar dados do arquivo
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const stream = Readable.from(buffer);
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const fileName = `audio_${timestamp}.webm`;
+  // 1. Encontrar ou criar a pasta para o usuário
+  const userFolderName = `DNA_Respostas_${userEmail}`;
+  let userFolderId: string | undefined;
 
+  const folderQuery = `mimeType='application/vnd.google-apps.folder' and name='${userFolderName}' and '${parentFolderId}' in parents and trashed=false`;
+  const folderRes = await drive.files.list({
+    q: folderQuery,
+    fields: 'files(id, name)',
+    spaces: 'drive',
+  });
+
+  if (folderRes.data.files && folderRes.data.files.length > 0) {
+    userFolderId = folderRes.data.files[0].id!;
+  } else {
     const fileMetadata = {
-      name: fileName,
-      parents: [userFolderId],
-      description: `Pergunta: ${questionText}`,
+      name: userFolderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentFolderId],
     };
-
-    // 4. Upload do arquivo
-    const media = {
-      mimeType: 'audio/webm',
-      body: stream,
-    };
-
-    const file = await drive.files.create({
-      requestBody: fileMetadata, // Corrigido: usar requestBody ao invés de resource
-      media: media,
+    const newFolder = await drive.files.create({
+      requestBody: fileMetadata,
       fields: 'id',
     });
-
-    if (!file.data.id) {
-      throw new Error('Upload não retornou um ID de arquivo.');
-    }
-
-    console.log(`Arquivo de áudio enviado com sucesso. ID: ${file.data.id}`);
-    return file.data.id;
-
-  } catch (error) {
-    console.error('Erro no upload para Google Drive:', error);
-    throw new Error('Falha no upload do áudio para o Google Drive.');
+    userFolderId = newFolder.data.id!;
   }
-}
+
+  // 2. Fazer o upload do arquivo de áudio
+  const fileName = `resposta_${new Date().toISOString()}.webm`;
+  const audioBuffer = Buffer.from(await audioBlob.arrayBuffer());
+  const bufferStream = new stream.PassThrough();
+  bufferStream.end(audioBuffer);
+
+  const fileMetadata = {
+    name: fileName,
+    parents: [userFolderId],
+    description: `Resposta para a pergunta: "${questionText}" na sessão iniciada em ${sessionCreatedAt.toISOString()}`,
+  };
+
+  const media = {
+    mimeType: audioBlob.type,
+    body: bufferStream,
+  };
+
+  const uploadedFile = await drive.files.create({
+    requestBody: fileMetadata,
+    media: media,
+    fields: 'id',
+  });
+
+  if (!uploadedFile.data.id) {
+    throw new Error('Falha ao obter o ID do arquivo após o upload.');
+  }
+
+  return uploadedFile.data.id;
+};
