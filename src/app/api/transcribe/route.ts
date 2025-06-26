@@ -2,8 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getServerSession } from 'next-auth/next';
-// Esta importação agora funcionará corretamente
-import { authOptions } from '../auth/[...nextauth]/route'; 
+import { authOptions } from '@/lib/auth'; // Importa a configuração centralizada
 import { uploadAudioToDrive } from '@/services/googleDriveService';
 import { DeepgramClient, createClient as createDeepgramClient } from '@deepgram/sdk';
 
@@ -13,13 +12,11 @@ const supabase = createClient(
 );
 
 export async function POST(request: Request) {
-  // Passo 0: Proteger a Rota usando as authOptions importadas
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Não Autorizado' }, { status: 401 });
   }
 
-  // ... (o resto do código permanece o mesmo)
   const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
   if (!deepgramApiKey) {
     return NextResponse.json({ error: 'Chave da API Deepgram não configurada' }, { status: 500 });
