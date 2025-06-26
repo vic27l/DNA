@@ -2,7 +2,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '../auth/[...nextauth]/route';
+// Esta importação agora funcionará corretamente
+import { authOptions } from '../auth/[...nextauth]/route'; 
 import { uploadAudioToDrive } from '@/services/googleDriveService';
 import { DeepgramClient, createClient as createDeepgramClient } from '@deepgram/sdk';
 
@@ -12,12 +13,13 @@ const supabase = createClient(
 );
 
 export async function POST(request: Request) {
-  // Passo 0: Proteger a Rota
+  // Passo 0: Proteger a Rota usando as authOptions importadas
   const session = await getServerSession(authOptions);
   if (!session || !session.user) {
     return NextResponse.json({ error: 'Não Autorizado' }, { status: 401 });
   }
 
+  // ... (o resto do código permanece o mesmo)
   const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
   if (!deepgramApiKey) {
     return NextResponse.json({ error: 'Chave da API Deepgram não configurada' }, { status: 500 });
@@ -34,7 +36,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Dados incompletos na requisição' }, { status: 400 });
     }
 
-    // Busca a data de criação da sessão para usar na descrição do arquivo do Drive
     const { data: sessionData, error: sessionError } = await supabase
       .from('analysis_sessions')
       .select('created_at')
@@ -45,7 +46,6 @@ export async function POST(request: Request) {
         throw new Error(`Sessão não encontrada ou erro ao buscar: ${sessionError?.message}`);
     }
 
-    // Passo 3: Upload e Transcrição em Paralelo
     const audioBuffer = Buffer.from(await audioBlob.arrayBuffer());
 
     const [uploadResult, transcribeResult] = await Promise.all([
@@ -65,7 +65,6 @@ export async function POST(request: Request) {
     }
     const transcript = result?.results?.channels[0]?.alternatives[0]?.transcript || '';
 
-    // Passo 4: Salvar no Banco de Dados
     const { error: insertError } = await supabase.from('user_responses').insert({
       session_id: sessionId,
       question_text: questionText,
@@ -74,13 +73,10 @@ export async function POST(request: Request) {
     });
 
     if (insertError) {
-      // Idealmente, aqui você teria uma lógica para lidar com o fato de que o áudio foi salvo
-      // mas o registro no DB falhou (ex: log, retry, etc.)
       console.error('Erro ao salvar no Supabase:', insertError);
       throw new Error('Falha ao salvar a resposta no banco de dados.');
     }
 
-    // Passo 5: Retornar a Transcrição
     return NextResponse.json({ transcript });
 
   } catch (error) {
