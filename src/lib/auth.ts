@@ -3,9 +3,7 @@ import { SupabaseAdapter } from "@auth/supabase-adapter";
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 
-// Este arquivo agora é o único lugar onde a configuração do NextAuth vive.
-// Todos os outros arquivos irão importá-lo daqui.
-
+// Enhanced configuration with better error handling and deployment support
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -18,11 +16,26 @@ export const authOptions: NextAuthOptions = {
     secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
   }),
   callbacks: {
-    // Graças ao arquivo next-auth.d.ts, esta seção é type-safe.
     async session({ session, user }) {
       session.user.id = user.id;
       return session;
     },
+    async signIn({ user, account, profile }) {
+      // Add logging for debugging
+      console.log('SignIn attempt:', { user: user?.email, account: account?.provider });
+      return true;
+    },
+    async redirect({ url, baseUrl }) {
+      // Ensure redirects work correctly in production
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (new URL(url).origin === baseUrl) return url;
+      return baseUrl;
+    },
   },
+  pages: {
+    signIn: '/api/auth/signin',
+    error: '/api/auth/error', // Error code passed in query string as ?error=
+  },
+  debug: process.env.NODE_ENV === 'development',
   secret: process.env.NEXTAUTH_SECRET,
 };
