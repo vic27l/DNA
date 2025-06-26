@@ -21,8 +21,9 @@ if (!process.env.NEXTAUTH_SECRET) {
   throw new Error('Missing NEXTAUTH_SECRET in .env.local');
 }
 
-// CORREÇÃO: A palavra "export" foi removida desta linha.
-const authOptions: NextAuthOptions = {
+// CORREÇÃO: A palavra "export" foi RE-ADICIONADA aqui.
+// Agora isso é seguro porque o arquivo next-auth.d.ts corrige o erro de tipo.
+export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -35,17 +36,14 @@ const authOptions: NextAuthOptions = {
   }),
   callbacks: {
     async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-      }
+      // Esta linha agora é considerada válida pelo TypeScript graças ao next-auth.d.ts
+      session.user.id = user.id; 
       return session;
     },
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
 
-// O handler é criado usando as authOptions definidas acima
 const handler = NextAuth(authOptions);
 
-// Apenas as funções GET e POST são exportadas, como o Next.js espera.
 export { handler as GET, handler as POST };
