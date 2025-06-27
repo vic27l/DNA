@@ -1,18 +1,24 @@
-import { NextAuthOptions } from 'next-auth';
-import GoogleProvider from 'next-auth/providers/google';
-import { SupabaseAdapter } from "@next-auth/supabase-adapter";
-import { createClient } from '@supabase/supabase-js';
+// src/lib/auth.ts
 
-// Ensure environment variables are defined
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+import NextAuth, { type NextAuthOptions } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
+// IMPORTANTE: Importando o adapter correto que instalamos
+import { SupabaseAdapter } from "@auth/supabase-adapter";
+import { createClient } from "@supabase/supabase-js";
+import type { Adapter } from "next-auth/adapters";
+
+// Validação das variáveis de ambiente para evitar erros
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const nextAuthSecret = process.env.NEXTAUTH_SECRET;
 
-if (!supabaseUrl || !supabaseServiceRoleKey || !googleClientId || !googleClientSecret) {
-  throw new Error("Missing required environment variables for Supabase or Google Auth.");
+if (!googleClientId || !googleClientSecret || !supabaseUrl || !supabaseServiceRoleKey || !nextAuthSecret) {
+  throw new Error("Variáveis de ambiente ausentes para autenticação.");
 }
 
+// Opções de configuração do NextAuth
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
@@ -20,21 +26,21 @@ export const authOptions: NextAuthOptions = {
       clientSecret: googleClientSecret,
     }),
   ],
+
+  // Usando o adapter correto com a tipagem esperada
   adapter: SupabaseAdapter({
     url: supabaseUrl,
     secret: supabaseServiceRoleKey,
-    // The 'schema' property was removed as it's not a valid option
-    // in the version of the adapter you are using.
-    // The adapter defaults to the 'public' schema.
-  }),
+  }) as Adapter,
+
+  // Definindo a estratégia de sessão para 'database', que é o recomendado para adapters
   session: {
     strategy: "database",
-    // Seconds - How long until an idle session expires and is no longer valid.
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    // Seconds - Throttle how frequently to write to the database to extend a session.
-    // Use `updateAge` to control how often the session is updated in the database.
-    updateAge: 24 * 60 * 60, // 24 hours
   },
+  
+  secret: nextAuthSecret,
+
+  // Adicionando callbacks para incluir o ID do usuário na sessão
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
@@ -43,5 +49,8 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  // Add other NextAuth options here as needed
+
+  pages: {
+    error: '/auth/error',
+  },
 };
