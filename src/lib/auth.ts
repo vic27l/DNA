@@ -3,7 +3,6 @@
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { SupabaseAdapter } from "@next-auth/supabase-adapter";
-import { createClient } from "@supabase/supabase-js";
 
 // Define the NextAuth options
 export const authOptions: NextAuthOptions = {
