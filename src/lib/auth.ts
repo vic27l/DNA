@@ -22,10 +22,9 @@ export const authOptions: NextAuthOptions = {
   adapter: SupabaseAdapter({
     url: supabaseUrl,
     secret: supabaseServiceRoleKey,
-    // The schema property is required at runtime by the adapter to connect to Supabase correctly,
-    // even though the TypeScript types cause a build error.
-    // We use `as any` to bypass the incorrect type definition and solve the runtime error.
-  } as any),
+    // Explicitly set the schema to 'public' which is the default and allowed schema
+    schema: 'public'
+  }),
   session: {
     strategy: "database",
     // Seconds - How long until an idle session expires and is no longer valid.
@@ -42,5 +41,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  // Add debug logging for development
+  debug: process.env.NODE_ENV === 'development',
   // Add other NextAuth options here as needed
 };
