@@ -1,29 +1,13 @@
-// PATCHED: Fixed schema to valid one ('public') in SupabaseAdapter
+import { createClient } from '@supabase/supabase-js';
 
-import NextAuth, { type NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
-import { SupabaseAdapter } from "@next-auth/supabase-adapter";
-import { createClient } from "@supabase/supabase-js";
+// Pega a URL do projeto e a chave anônima pública das variáveis de ambiente.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+// Verifica se as variáveis foram definidas. Se não, lança um erro.
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Supabase URL and/or anonymous key are not defined in environment variables.');
+}
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
-  adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    schema: "public", // ✅ Must be a valid schema (public, graphql_public, etc.)
-  }),
-  secret: process.env.NEXTAUTH_SECRET,
-};
-
-const handler = NextAuth(authOptions);
-export { handler as GET, handler as POST };
+// Cria e exporta o cliente do Supabase.
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
