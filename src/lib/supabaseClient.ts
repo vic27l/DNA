@@ -1,13 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+// src/lib/supabaseClient.ts
 
-// Pega a URL do projeto e a chave anônima pública das variáveis de ambiente.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { createClient } from '@supabase/supabase-js'
 
-// Verifica se as variáveis foram definidas. Se não, lança um erro.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Supabase URL and/or anonymous key are not defined in environment variables.');
+  throw new Error('Supabase URL ou Anon Key não encontradas nas variáveis de ambiente.')
 }
 
-// Cria e exporta o cliente do Supabase.
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
