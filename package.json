@@ -17,7 +17,6 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/supabase-js": "^2.43.4",
     "@auth/supabase-adapter": "^1.1.0",
-    "@next-auth/supabase-adapter": "^0.2.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.2.10",

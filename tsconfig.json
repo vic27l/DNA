@@ -19,14 +19,15 @@
     ],
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "typeRoots": ["./node_modules/@types", "./types"]
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts",
-    "next-auth.d.ts" // <-- ADICIONE ESTA LINHA
+    "types/globals.d.ts"
   ],
   "exclude": ["node_modules"]
 }
