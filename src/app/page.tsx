@@ -1,122 +1,80 @@
-// src/app/page.tsx (Modificado)
+// src/app/page.tsx
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Mic, Square, Loader, BrainCircuit, LogOut } from 'lucide-react';
+import { useSession, signOut } from 'next-auth/react';
+import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
-import { Mic, Square, Loader2, Play } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+
 import { PERGUNTAS_DNA, criarPerfilInicial } from '../lib/config';
 import { analisarFragmento, gerarSinteseFinal } from '../lib/analysisEngine';
 import { initAudio, playAudioFromUrl, startRecording, stopRecording } from '../services/webAudioService';
-import { supabase } from '@/lib/supabaseClient';
-import type { ExpertProfile, SessionStatus, Pergunta, UserResponse, AnalysisSession } from '../lib/types';
+import type { ExpertProfile, SessionStatus, Pergunta } from '../lib/types';
 import LoginButton from '@/components/LoginButton';
 
-// Componentes visuais (FloatingParticles, DottedLines, etc.) permanecem os mesmos...
-const FloatingParticles = () => { /* ...código omitido para brevidade... */ return <div className="floating-particles"></div>; };
-const DottedLines = () => { /* ...código omitido para brevidade... */ return <></>; };
-const AudioVisualizer = ({ isActive }: { isActive: boolean }) => { /* ...código omitido para brevidade... */ return <div className="audio-visualizer"></div>; };
-const ProgressIndicator = ({ current, total }: { current: number; total: number }) => { /* ...código omitido para brevidade... */ return <div className="progress-container"></div>; };
-const Logo = () => (
-  <div className="logo-container">
-    <Image 
-      src="/logo.png"
-      alt="Logo" 
-      width={75}
-      height={30}
-      className="logo-image"
-      priority
-    />
-  </div>
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
-const Footer = () => ( <footer className="footer"><div className="footer-content"><p>DNA</p><p>Deep Narrative Analysis - UP LANÇAMENTOS 2025</p></div></footer> );
 
-// Interface principal da aplicação
 export default function DnaInterface() {
   const { data: session, status: authStatus } = useSession();
+
   const [status, setStatus] = useState<SessionStatus>('idle');
   const [perguntaAtual, setPerguntaAtual] = useState<Pergunta | null>(null);
   const [perfil, setPerfil] = useState<ExpertProfile>(criarPerfilInicial());
   const [error, setError] = useState<string | null>(null);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [finalReport, setFinalReport] = useState<string | null>(null);
-
   const perguntaIndex = useRef(0);
-  const user = session?.user as { id: string; name?: string; email?: string };
 
   useEffect(() => {
     initAudio().catch(err => {
       console.error("Erro ao inicializar áudio:", err);
-      setError("Não foi possível acessar o microfone. Verifique as permissões do navegador.");
+      setError("Não foi possível acessar o microfone.");
     });
   }, []);
 
   const iniciarSessao = useCallback(async () => {
-    if (!user) {
-      setError("Você precisa estar logado para iniciar uma análise.");
-      return;
-    }
-
-    setStatus('processing');
+    if (!session?.user?.id) return;
+    perguntaIndex.current = 0;
+    setPerfil(criarPerfilInicial());
     setError(null);
-    setFinalReport(null);
-    
+    setStatus('processing');
     try {
-      // Cria uma nova sessão no banco de dados
-      const { data, error: insertError } = await supabase
+      const { data, error: dbError } = await supabase
         .from('analysis_sessions')
-        .insert({ user_id: user.id })
-        .select()
+        .insert({ user_id: session.user.id })
+        .select('id')
         .single();
-      
-      if (insertError) throw insertError;
-
+      if (dbError) throw dbError;
       setCurrentSessionId(data.id);
-      perguntaIndex.current = 0;
-      setPerfil(criarPerfilInicial());
-      await fazerProximaPergunta(0);
-
-    } catch (err: any) {
-      console.error("Erro ao iniciar sessão no DB:", err);
-      setError("Não foi possível iniciar uma nova sessão. Tente novamente.");
+      fazerProximaPergunta();
+    } catch (e) {
+      setError("Erro ao criar a sessão no banco de dados.");
       setStatus('idle');
     }
+  }, [session]);
 
-  }, [user]);
-  
-  const fazerProximaPergunta = useCallback(async (index: number) => {
-    if (index < PERGUNTAS_DNA.length) {
-      const pergunta = PERGUNTAS_DNA[index];
+  const fazerProximaPergunta = useCallback(async () => {
+    if (perguntaIndex.current < PERGUNTAS_DNA.length) {
+      const pergunta = PERGUNTAS_DNA[perguntaIndex.current];
       setPerguntaAtual(pergunta);
       setStatus('listening');
-      setIsAudioPlaying(true);
-      
       try {
-        await playAudioFromUrl(pergunta.audioUrl, () => {
-          setStatus('waiting_for_user');
-          setIsAudioPlaying(false);
-        });
-        perguntaIndex.current = index + 1;
+        await playAudioFromUrl(pergunta.audioUrl, () => setStatus('waiting_for_user'));
+        perguntaIndex.current++;
       } catch (err) {
-        console.error("Erro ao reproduzir áudio:", err);
-        setError("Erro ao reproduzir a pergunta. Tentando novamente...");
-        setTimeout(() => fazerProximaPergunta(index), 2000);
+        setError("Erro ao reproduzir a pergunta.");
+        setTimeout(fazerProximaPergunta, 2000);
       }
     } else {
-      // Finaliza a sessão
       setStatus('processing');
-      const sintese = gerarSinteseFinal(perfil);
-      setFinalReport(sintese);
-      
-      // Salva a síntese final no banco de dados
-      if (currentSessionId) {
-        await supabase
-          .from('analysis_sessions')
-          .update({ final_synthesis: sintese })
-          .eq('id', currentSessionId);
-      }
-      
+      const sinteseFinal = gerarSinteseFinal(perfil);
+      await supabase
+        .from('analysis_sessions')
+        .update({ final_synthesis: sinteseFinal })
+        .eq('id', currentSessionId!);
       setStatus('finished');
     }
   }, [perfil, currentSessionId]);
@@ -126,149 +84,136 @@ export default function DnaInterface() {
       await startRecording();
       setStatus('recording');
     } catch (err) {
-      console.error("Erro ao iniciar gravação:", err);
       setError("Não foi possível iniciar a gravação.");
     }
   }, []);
-  
+
   const handleStopRecording = useCallback(async () => {
     setStatus('processing');
     try {
       const audioBlob = await stopRecording();
-      if (!currentSessionId || !perguntaAtual) {
-        throw new Error("Sessão ou pergunta atual não encontrada.");
+      const transcricao = await transcreverEProcessarAudio(audioBlob);
+      if (perguntaAtual) {
+        const perfilAtualizado = analisarFragmento(transcricao, perfil, perguntaAtual);
+        setPerfil(perfilAtualizado);
       }
-      const transcricao = await transcreverAudio(audioBlob, currentSessionId, perguntaAtual.texto);
-      
-      const perfilAtualizado = analisarFragmento(transcricao, perfil, perguntaAtual);
-      setPerfil(perfilAtualizado);
-      
-      await fazerProximaPergunta(perguntaIndex.current);
-
+      fazerProximaPergunta();
     } catch (err) {
-      console.error("Erro ao processar gravação:", err);
-      setError("Problema ao processar sua resposta. Continuando...");
-      setTimeout(() => fazerProximaPergunta(perguntaIndex.current), 2000);
+      setError("Problema ao processar sua resposta.");
+      setTimeout(fazerProximaPergunta, 2000);
     }
-  }, [perguntaAtual, perfil, currentSessionId, fazerProximaPergunta]);
+  }, [perguntaAtual, perfil, fazerProximaPergunta]);
 
-  const transcreverAudio = async (audioBlob: Blob, sessionId: string, questionText: string): Promise<string> => {
+  const transcreverEProcessarAudio = async (audioBlob: Blob): Promise<string> => {
+    if (!currentSessionId || !perguntaAtual) throw new Error("Sessão ou pergunta inválida.");
     const formData = new FormData();
-    formData.append('audio', audioBlob);
-    formData.append('sessionId', sessionId);
-    formData.append('questionText', questionText);
-
+    formData.append('audio', audioBlob, 'resposta.webm');
+    formData.append('sessionId', currentSessionId);
+    formData.append('questionText', perguntaAtual.texto);
     const response = await fetch('/api/transcribe', { method: 'POST', body: formData });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || "Falha na transcrição");
-    }
-    
     const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Falha na transcrição.");
     return data.transcript;
   };
 
-  const getStatusConfig = () => { /* ...código omitido para brevidade... */ return { text: '', dotClass: '' }; };
-  const statusConfig = getStatusConfig();
-  const formatQuestionText = (text: string) => text.replace(/\b(você|sua|seu|quem|qual|como|onde|quando|por que)\b/gi, `<span class="question-highlight">$1</span>`);
+  // --- Renderização da UI ---
 
-  // Tela de Login
-  if (authStatus !== 'authenticated') {
+  // 1. Tela de Carregamento
+  if (authStatus === 'loading') {
     return (
-        <div className="main-container flex flex-col items-center justify-center">
-            <FloatingParticles />
-            <DottedLines />
-            <Logo />
-            <div className="flex-grow flex flex-col items-center justify-center text-center p-8">
-                <h1 className="text-4xl md:text-5xl font-bold mb-4">
-                    Bem-vindo ao <br /> <span className="text-orange-500">Deep Narrative Analysis</span>
-                </h1>
-                <p className="text-lg text-gray-300 mb-8 max-w-2xl">
-                    Desvende as camadas da sua psique através de uma jornada interativa de autoanálise. Faça login para iniciar sua análise.
-                </p>
-                <LoginButton />
-            </div>
-            <Footer />
-        </div>
+      <div className="main-container flex flex-col items-center justify-center">
+        <Loader className="h-12 w-12 animate-spin text-green-400" />
+      </div>
     );
   }
 
-  // Tela Inicial (Logado)
-  if (status === 'idle') {
+  // 2. NOVA Tela de Login
+  if (authStatus !== 'authenticated') {
     return (
-      <div className="main-container">
-        <FloatingParticles />
-        <DottedLines />
-        <div className="absolute top-4 right-4 z-20"><LoginButton /></div>
-        <Logo />
-        <div className="content-area">
-            {/* Conteúdo da tela inicial */}
-            <button onClick={iniciarSessao}>Iniciar Análise DNA</button>
+      <div className="main-container flex flex-col items-center justify-center text-center p-4">
+        <div className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"></div>
+        <div className="relative z-10 flex flex-col items-center">
+          <BrainCircuit className="h-20 w-20 text-green-400 mb-6 drop-shadow-[0_0_10px_rgba(74,222,128,0.5)]" />
+          <h1 className="text-4xl md:text-5xl font-bold mb-4 text-white font-mono tracking-wide">
+            Deep Narrative Analysis
+          </h1>
+          <p className="text-lg text-gray-300 mb-10 max-w-xl">
+            Desvende os padrões da sua psique. Uma jornada de autoconhecimento através da sua própria voz.
+          </p>
+          <LoginButton />
         </div>
-        <Footer />
       </div>
     );
   }
   
-  // Tela de Análise Finalizada
-  if (status === 'finished' && finalReport) {
-      return (
-        <div className="main-container">
-            <FloatingParticles />
-            <div className="absolute top-4 right-4 z-20"><LoginButton /></div>
-            <Logo />
-            <div className="content-area">
-                <div className="text-center max-w-4xl w-full">
-                    <h1 className="question-text">Análise <span className="question-highlight">Concluída</span></h1>
-                    <div className="bg-gray-800/50 p-6 rounded-lg max-h-[50vh] overflow-y-auto text-left">
-                        <pre className="whitespace-pre-wrap font-mono text-sm">{finalReport}</pre>
-                    </div>
-                    <button onClick={iniciarSessao} className="mt-8 bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-6 rounded-lg">
-                        Fazer Nova Análise
-                    </button>
-                </div>
-            </div>
-            <Footer />
-        </div>
-      );
-  }
-
-  // Tela Principal da Análise
+  // 3. Interface Principal da Aplicação
   return (
-    <div className="main-container">
-      <FloatingParticles />
-      <DottedLines />
-      <div className="absolute top-4 right-4 z-20"><LoginButton /></div>
-      <Logo />
-      <ProgressIndicator current={perguntaIndex.current} total={PERGUNTAS_DNA.length} />
-      <div className="content-area">
-        <div className="content-flex">
-          {/* ... interface de pergunta e botão de microfone ... */}
-          <div style={{ flex: 1 }}>
-            <div className="status-indicator">
-              <div className={`status-dot ${statusConfig.dotClass}`} />
-              <span className="status-text">{statusConfig.text}</span>
-            </div>
-            <h1 
-              className="question-text"
-              dangerouslySetInnerHTML={{ __html: perguntaAtual ? formatQuestionText(perguntaAtual.texto) : '' }}
-            />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2rem' }}>
-             <button
-              className={`mic-button ${status === 'recording' ? 'recording' : ''} ${status === 'listening' || status === 'processing' ? 'disabled' : ''}`}
-              onClick={status === 'recording' ? handleStopRecording : handleStartRecording}
-              disabled={status === 'listening' || status === 'processing'}
-            >
-              {/* Ícones do botão */}
-            </button>
-            <AudioVisualizer isActive={isAudioPlaying || status === 'recording'} />
-          </div>
-        </div>
+    <div className="main-container flex flex-col items-center justify-center p-4">
+      <div className="absolute top-5 right-5 flex items-center gap-4">
+        <span className="text-white text-sm hidden sm:inline">{session.user?.name}</span>
+        {session.user?.image && (
+          <Image src={session.user.image} alt="Avatar" width={40} height={40} className="rounded-full border-2 border-gray-600"/>
+        )}
+        <button onClick={() => signOut()} className="p-2 rounded-full bg-gray-800 hover:bg-red-700/50 transition-colors">
+          <LogOut className="h-5 w-5 text-white"/>
+        </button>
       </div>
-      <Footer />
-      {error && <div className="error-toast">{error}</div>}
+
+      {status === 'idle' && (
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-2 text-white">Sessão Pronta</h1>
+          <p className="text-lg text-gray-300 mb-8">Quando estiver preparado(a), inicie a análise.</p>
+          <button
+            onClick={iniciarSessao}
+            className="bg-green-600 text-white px-8 py-3 rounded-md hover:bg-green-700 transition-all duration-300 font-semibold shadow-lg hover:shadow-green-500/50"
+          >
+            Iniciar Análise DNA
+          </button>
+        </div>
+      )}
+
+      {status === 'finished' && (
+        <div className="text-center max-w-4xl mx-auto animate-fade-in">
+             <h1 className="text-3xl font-bold mb-4 text-white">Análise Concluída</h1>
+             <div className="bg-gray-900/50 border border-gray-700 p-6 rounded-lg text-left overflow-auto max-h-[50vh] shadow-inner">
+                 <pre className="whitespace-pre-wrap font-mono text-sm text-gray-200">
+                    {gerarSinteseFinal(perfil)}
+                 </pre>
+             </div>
+             <button
+                onClick={iniciarSessao}
+                className="mt-8 bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors font-semibold shadow-lg hover:shadow-blue-500/50"
+                >
+                Fazer Nova Análise
+             </button>
+        </div>
+      )}
+      
+      {['listening', 'waiting_for_user', 'recording', 'processing'].includes(status) && (
+        <div className="text-center animate-fade-in">
+             <p className="text-lg mb-2 text-gray-400">Pergunta {perguntaIndex.current} de {PERGUNTAS_DNA.length}</p>
+             <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-white min-h-[8rem] flex items-center justify-center px-4">
+                {perguntaAtual?.texto}
+             </h2>
+             <div className="mb-8 h-8 flex items-center justify-center">
+                 {status === 'listening' && <p className="text-blue-400 animate-pulse">Ouvindo...</p>}
+                 {status === 'processing' && <Loader className="h-8 w-8 text-green-400 animate-spin" />}
+                 {status === 'recording' && <div className="flex items-center text-red-500 animate-pulse"><div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>Gravando...</div>}
+             </div>
+             <button
+                 onClick={status === 'recording' ? handleStopRecording : handleStartRecording}
+                 disabled={status !== 'waiting_for_user' && status !== 'recording'}
+                 className="w-24 h-24 rounded-full flex items-center justify-center mx-auto transition-all duration-300 shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed
+                     ${status === 'recording' ? 'bg-red-600 hover:bg-red-700 shadow-red-500/50' : 'bg-green-600 hover:bg-green-700 shadow-green-500/50'}
+                     ${status === 'waiting_for_user' ? 'animate-pulse-slow' : ''}"
+             >
+                 {status === 'recording' ? <Square size={40} className="text-white" /> : <Mic size={40} className="text-white" />}
+             </button>
+             {status === 'waiting_for_user' && <p className="mt-4 text-gray-400">Clique no microfone para gravar</p>}
+        </div>
+      )}
+      
+      {error && <p className="absolute bottom-10 text-red-400 bg-red-900/50 px-4 py-2 rounded-md">{error}</p>}
     </div>
   );
 }
