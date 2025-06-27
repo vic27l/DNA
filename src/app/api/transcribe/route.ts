@@ -1,56 +1,81 @@
+// src/app/api/transcribe/route.ts
+
 import { DeepgramClient, createClient } from '@deepgram/sdk';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth';
+import { uploadAudioToDrive } from '@/services/googleDriveService';
+import { supabase } from '@/lib/supabaseClient';
 
-/**
- * Rota de API para transcrever áudio usando a Deepgram.
- */
 export async function POST(request: Request) {
-  // Pega a chave da API das variáveis de ambiente.
-  const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
-
-  if (!deepgramApiKey) {
-    console.error("A chave da API da Deepgram não está configurada.");
-    return NextResponse.json(
-      { error: 'A chave da API da Deepgram não está configurada no servidor.' },
-      { status: 500 }
-    );
+  // Passo 0: Proteger a Rota
+  const session = await getServerSession(authOptions);
+  
+  // Verificação de sessão e email
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Não autorizado ou sessão inválida.' }, { status: 401 });
   }
 
-  // Inicializa o cliente da Deepgram com a chave.
+  const user = session.user;
+  const userId = user.email; // Usando email como identificador único
+
+  const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+  if (!deepgramApiKey) {
+    console.error("A chave da API da Deepgram não está configurada.");
+    return NextResponse.json({ error: 'Erro de configuração no servidor.' }, { status: 500 });
+  }
+
   const deepgram: DeepgramClient = createClient(deepgramApiKey);
 
   try {
-    // Pega o blob de áudio da requisição.
-    const audioBlob = await request.blob();
+    const formData = await request.formData();
+    const audioBlob = formData.get('audio') as Blob | null;
+    const sessionId = formData.get('sessionId') as string | null;
+    const questionText = formData.get('questionText') as string | null;
+    
+    if (!audioBlob || !sessionId || !questionText) {
+      return NextResponse.json({ error: 'Dados da requisição incompletos.' }, { status: 400 });
+    }
+    
     const audioBuffer = Buffer.from(await audioBlob.arrayBuffer());
 
-    // Envia o áudio para a Deepgram para transcrição.
-    const { result, error } = await deepgram.listen.prerecorded.transcribeFile(
-      audioBuffer,
-      {
-        model: 'nova-2',    // Modelo de transcrição avançado.
-        language: 'pt-BR',  // Define o idioma para Português do Brasil.
-        smart_format: true, // Formatação inteligente (pontuação, parágrafos).
-      }
-    );
+    const [driveFileId, deepgramResponse] = await Promise.all([
+      uploadAudioToDrive(audioBlob, user.email!, questionText),
+      deepgram.listen.prerecorded.transcribeFile(
+        audioBuffer,
+        {
+          model: 'nova-2',
+          language: 'pt-BR',
+          smart_format: true,
+        }
+      )
+    ]);
 
-    if (error) {
-      console.error('Erro retornado pela API da Deepgram:', error);
-      throw error;
+    if (deepgramResponse.error) {
+      console.error('Erro retornado pela API da Deepgram:', deepgramResponse.error);
+      throw deepgramResponse.error;
     }
 
-    // Extrai a transcrição do resultado de forma segura.
-    const transcript = result?.results?.channels[0]?.alternatives[0]?.transcript || '';
+    const transcript = deepgramResponse.result?.results?.channels[0]?.alternatives[0]?.transcript || '';
     
-    // Retorna a transcrição em uma resposta JSON.
+    const { error: dbError } = await supabase
+      .from('user_responses')
+      .insert({
+        session_id: sessionId,
+        question_text: questionText,
+        transcript_text: transcript,
+        audio_file_drive_id: driveFileId,
+        user_id: userId, // Usando email como identificador único
+      });
+
+    if (dbError) {
+      console.error('Erro ao salvar resposta no Supabase:', dbError);
+    }
+    
     return NextResponse.json({ transcript });
 
   } catch (error) {
     console.error('Erro interno na rota de transcrição:', error);
-    // Retorna uma mensagem de erro genérica.
-    return NextResponse.json(
-      { error: 'Falha ao transcrever o áudio.' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Falha ao processar o áudio.' }, { status: 500 });
   }
 }

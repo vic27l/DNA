@@ -1,27 +1,27 @@
-// next-auth.d.ts
-import 'next-auth';
+// types/next-auth.d.ts
 
-// Declara um módulo para estender os tipos existentes do next-auth
-declare module 'next-auth' {
-  /**
-   * O objeto Session retornado pelos hooks como `useSession` ou `getSession`.
-   */
+import NextAuth from "next-auth";
+
+declare module "next-auth" {
   interface Session {
-    // Adicionamos a nossa propriedade 'id' dentro do objeto user
     user: {
-      id: string; // O ID do usuário vindo do banco de dados
-    } & { // O '&' combina nossos tipos com os tipos originais
+      id: string;
       name?: string | null;
       email?: string | null;
       image?: string | null;
     };
   }
 
-  /**
-   * O objeto User que vem do banco de dados através do Adapter.
-   */
   interface User {
-    // Também garantimos que o tipo User tenha um 'id'
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    image?: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
     id: string;
   }
 }
