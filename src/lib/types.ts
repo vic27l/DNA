@@ -1,13 +1,13 @@
-// src/lib/types.ts (Modificado)
+// src/lib/types.ts
 
-// --- Tipos existentes permanecem os mesmos ---
-
+// Interface para uma única pergunta
 export interface Pergunta {
   texto: string;
   audioUrl: string;
   dominio: string; 
 }
 
+// Interface para as métricas do Big Five
 export interface BigFiveMetrics {
   [key: string]: number;
   Openness: number;
@@ -17,6 +17,7 @@ export interface BigFiveMetrics {
   Neuroticism: number;
 }
 
+// Interface para os valores de Schwartz
 export interface SchwartzValues {
   [key: string]: number;
   'Self-Direction': number;
@@ -31,6 +32,7 @@ export interface SchwartzValues {
   Universalism: number;
 }
 
+// Interface para os motivadores primários
 export interface PrimaryMotivators {
   [key: string]: number;
   Purpose: number;
@@ -39,10 +41,12 @@ export interface PrimaryMotivators {
   Connection: number;
 }
 
+// Tipos para as chaves das métricas
 export type BigFive = keyof BigFiveMetrics;
 export type ValorSchwartz = keyof SchwartzValues;
 export type Motivador = keyof PrimaryMotivators;
 
+// A estrutura principal que armazena todo o perfil do expert
 export interface ExpertProfile {
   bigFive: BigFiveMetrics;
   valoresSchwartz: SchwartzValues;
@@ -58,6 +62,7 @@ export interface ExpertProfile {
   conflitosDeValorDetectados: string[];
 }
 
+// Define os possíveis estados da sessão para controlar a UI
 export type SessionStatus =
   | 'idle'
   | 'listening'
@@ -65,24 +70,3 @@ export type SessionStatus =
   | 'recording'
   | 'processing'
   | 'finished';
-
-
-// --- NOVOS TIPOS PARA O BANCO DE DADOS ---
-
-// Representa a estrutura da tabela 'analysis_sessions'
-export interface AnalysisSession {
-  id: string; // uuid
-  user_id: string; // uuid, foreign key para users.id
-  created_at: string; // timestamp with time zone
-  final_synthesis?: string; // text, nullable
-}
-
-// Representa a estrutura da tabela 'user_responses'
-export interface UserResponse {
-  id: string; // uuid
-  session_id: string; // uuid, foreign key para analysis_sessions.id
-  question_text: string; // text
-  transcript_text: string; // text
-  audio_file_drive_id: string; // O ID do arquivo no Google Drive
-  created_at: string; // timestamp with time zone
-}
