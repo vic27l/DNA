@@ -1,6 +1,7 @@
 import { NextAuthOptions } from 'next-auth';
 import GoogleProvider from 'next-auth/providers/google';
 import { SupabaseAdapter } from "@next-auth/supabase-adapter";
+import { createClient } from '@supabase/supabase-js';
 
 // Ensure environment variables are defined
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,6 +23,9 @@ export const authOptions: NextAuthOptions = {
   adapter: SupabaseAdapter({
     url: supabaseUrl,
     secret: supabaseServiceRoleKey,
+    // The 'schema' property was removed as it's not a valid option
+    // in the version of the adapter you are using.
+    // The adapter defaults to the 'public' schema.
   }),
   session: {
     strategy: "database",
@@ -39,7 +43,5 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-  // Add debug logging for development
-  debug: process.env.NODE_ENV === 'development',
   // Add other NextAuth options here as needed
 };
