@@ -22,8 +22,6 @@ export const authOptions: NextAuthOptions = {
   adapter: SupabaseAdapter({
     url: supabaseUrl,
     secret: supabaseServiceRoleKey,
-    // Explicitly set the schema to 'public' which is the default and allowed schema
-    schema: 'public'
   }),
   session: {
     strategy: "database",
