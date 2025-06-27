@@ -3,7 +3,6 @@ import GoogleProvider from "next-auth/providers/google";
 import { SupabaseAdapter } from "@next-auth/supabase-adapter";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 
-// 👇 Renomeado para evitar conflito
 const supabaseAdmin = createSupabaseAdminClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -18,8 +17,7 @@ const handler = NextAuth({
   ],
   adapter: SupabaseAdapter({
     url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    schema: "public",
+    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!
   }),
   secret: process.env.NEXTAUTH_SECRET,
 });
