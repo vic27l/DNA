@@ -1,26 +1,47 @@
-// PATCH: Export `authOptions` separately so it can be imported
-
-import NextAuth, { type NextAuthOptions } from "next-auth";
-import GoogleProvider from "next-auth/providers/google";
+import { NextAuthOptions } from 'next-auth';
+import GoogleProvider from 'next-auth/providers/google';
 import { SupabaseAdapter } from "@next-auth/supabase-adapter";
+import { createClient } from '@supabase/supabase-js';
 
-// Define the NextAuth options
+// Ensure environment variables are defined
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+if (!supabaseUrl || !supabaseServiceRoleKey || !googleClientId || !googleClientSecret) {
+  throw new Error("Missing required environment variables for Supabase or Google Auth.");
+}
+
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      clientId: googleClientId,
+      clientSecret: googleClientSecret,
     }),
   ],
   adapter: SupabaseAdapter({
-    url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    secret: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    url: supabaseUrl,
+    secret: supabaseServiceRoleKey,
+    // The 'schema' property was removed as it's not a valid option
+    // in the version of the adapter you are using.
+    // The adapter defaults to the 'public' schema.
   }),
-  secret: process.env.NEXTAUTH_SECRET,
+  session: {
+    strategy: "database",
+    // Seconds - How long until an idle session expires and is no longer valid.
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    // Seconds - Throttle how frequently to write to the database to extend a session.
+    // Use `updateAge` to control how often the session is updated in the database.
+    updateAge: 24 * 60 * 60, // 24 hours
+  },
+  callbacks: {
+    async session({ session, user }) {
+      if (session.user) {
+        session.user.id = user.id;
+      }
+      return session;
+    },
+  },
+  // Add other NextAuth options here as needed
 };
-
-// Create the NextAuth handler
-const handler = NextAuth(authOptions);
-
-// Export the handler for GET and POST requests
-export { handler as GET, handler as POST };
