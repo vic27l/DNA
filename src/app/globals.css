@@ -69,8 +69,8 @@ body {
 }
 
 .logo-image {
-  height: auto; /* A altura será automática baseada na largura e proporção */
-  width: 100%; /* A imagem ocupará a largura do contâiner */
+  height: 60px;
+  width: auto;
   object-fit: contain;
 }
 
@@ -174,7 +174,7 @@ body {
 /* Audio visualizer */
 .audio-visualizer {
   display: flex;
-  align-items: flex-end; /* CORREÇÃO APLICADA AQUI */
+  align-items: end;
   justify-content: center;
   gap: 3px;
   height: 120px;
