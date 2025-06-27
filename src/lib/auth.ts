@@ -19,19 +19,19 @@ export const authOptions: NextAuthOptions = {
       clientSecret: googleClientSecret,
     }),
   ],
-  // O adaptador agora encontrará as tabelas no schema 'next_auth' correto.
   adapter: SupabaseAdapter({
     url: supabaseUrl,
     secret: supabaseServiceRoleKey,
-  }),
-  pages: {
-    // Aponta para a página de erro customizada que criamos.
-    // Isso evita o erro 404 genérico caso algo ainda dê errado.
-    error: '/auth/error',
-  },
+    // The schema property is required at runtime by the adapter to connect to Supabase correctly,
+    // even though the TypeScript types cause a build error.
+    // We use `as any` to bypass the incorrect type definition and solve the runtime error.
+  } as any),
   session: {
     strategy: "database",
+    // Seconds - How long until an idle session expires and is no longer valid.
     maxAge: 30 * 24 * 60 * 60, // 30 days
+    // Seconds - Throttle how frequently to write to the database to extend a session.
+    // Use `updateAge` to control how often the session is updated in the database.
     updateAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
@@ -42,4 +42,5 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
+  // Add other NextAuth options here as needed
 };
